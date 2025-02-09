@@ -20,11 +20,15 @@ try:
 except ImportError:
     # Pydantic 1
     from pydantic.fields import Field
-    from pydantic.class_validators import validator as field_validator  # type: ignore [no-redef]
+
+    # type: ignore [no-redef]
+    from pydantic.class_validators import validator as field_validator
 
 from typing import AsyncGenerator, List, Iterable, Iterator, Optional, Union
 import json
 import yaml
+
+thinking = False
 
 
 @hookimpl
@@ -216,7 +220,8 @@ def register_commands(cli):
         )
         if response.status_code != 200:
             raise click.ClickException(
-                f"Error {response.status_code} from OpenAI API: {response.text}"
+                f"Error {response.status_code} from OpenAI API: {
+                    response.text}"
             )
         models = response.json()["data"]
         if json_:
@@ -542,7 +547,7 @@ class Chat(_Shared, Model):
                 if chunk.usage:
                     usage = chunk.usage.model_dump()
                 try:
-                    content = chunk.choices[0].delta.content
+                    content = output_with_reason(chunk)
                 except IndexError:
                     content = None
                 if content is not None:
@@ -595,7 +600,7 @@ class AsyncChat(_Shared, AsyncModel):
                     usage = chunk.usage.model_dump()
                 chunks.append(chunk)
                 try:
-                    content = chunk.choices[0].delta.content
+                    content = output_with_reason(chunk)
                 except IndexError:
                     content = None
                 if content is not None:
@@ -676,6 +681,21 @@ class Completion(Chat):
 
 def not_nulls(data) -> dict:
     return {key: value for key, value in data if value is not None}
+
+
+def output_with_reason(chunk) -> str:
+    global thinking
+    delta = chunk.choices[0].delta
+    if not thinking and hasattr(delta, "reasoning_content"):
+        thinking = True
+        return "\n".join(["<think>", delta.reasoning_content])
+    elif hasattr(delta, "reasoning_content"):
+        return delta.reasoning_content
+    elif thinking:
+        thinking = False
+        return "\n".join(["\n</think>", chunk.choices[0].delta.content])
+    else:
+        return chunk.choices[0].delta.content
 
 
 def combine_chunks(chunks: List) -> dict:
