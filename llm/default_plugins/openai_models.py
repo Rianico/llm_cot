@@ -693,7 +693,7 @@ def output_with_reason(chunk) -> str:
         return delta.reasoning_content
     elif thinking:
         thinking = False
-        return "\n".join(["\n</think>", chunk.choices[0].delta.content])
+        return "\n".join(["</think>", chunk.choices[0].delta.content])
     else:
         return chunk.choices[0].delta.content
 
